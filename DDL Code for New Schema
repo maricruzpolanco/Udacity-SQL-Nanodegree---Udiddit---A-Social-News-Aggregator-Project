@@ -1,0 +1,92 @@
+CREATE SCHEMA new_udiddit;
+
+SET search_path TO new_udiddit;
+
+CREATE TABLE "users" (
+  "id" BIGSERIAL,
+  "username" VARCHAR(25) NOT NULL,
+  "last_login" TIMESTAMP, 
+  CONSTRAINT "users_pk" PRIMARY KEY ("id"),
+  CONSTRAINT "username_not_empty" CHECK (LENGTH(TRIM("username"))>0) 
+);		
+
+CREATE UNIQUE INDEX "lower_unique_username" ON "users" (LOWER("username"));
+CREATE INDEX "last_login" ON "users" ("username", "last_login");
+
+
+CREATE TABLE "topics" (
+  "id" BIGSERIAL,
+  "topic_name" VARCHAR(30) NOT NULL, 
+  "description" VARCHAR(500),
+  CONSTRAINT "topics_pk" PRIMARY KEY ("id"),
+  CONSTRAINT "topic_unique" UNIQUE ("topic_name"),
+  CONSTRAINT "topic_name_not_empty" CHECK (LENGTH(TRIM("topic_name"))> 0)
+); 
+
+
+CREATE TABLE "posts" (
+  "id" BIGSERIAL,
+  "topic_id" BIGINT NOT NULL,
+  "user_id" BIGINT,
+  "title" VARCHAR(100) NOT NULL,
+  "url" VARCHAR(4000),
+  "text_content" TEXT,
+  "creation_date" TIMESTAMP,
+  CONSTRAINT "posts_pk" PRIMARY KEY ("id"),
+  CONSTRAINT "posts_users_fk" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE SET NULL,
+  CONSTRAINT "posts_topics_fk" FOREIGN KEY ("topic_id") REFERENCES "topics" ("id") ON DELETE CASCADE,
+  CONSTRAINT "title_not_empty" CHECK (LENGTH(TRIM("title")) >0),
+  CONSTRAINT "url_or_text_content" CHECK (("url" IS NOT NULL AND "text_content" IS NULL) OR ("url" IS NULL AND "text_content" IS NOT NULL))
+);
+	
+CREATE INDEX "posts_by_given_user" ON "posts" ("user_id", "id");
+CREATE INDEX "posts_by_url" ON "posts" ("url", "id");
+CREATE INDEX "posts_by_topic" ON "posts" ("topic_id", "id");
+CREATE INDEX "recent_user_posts" ON "posts" ("creation_date" DESC, "user_id");
+
+
+CREATE TABLE "comments" (
+  "id" BIGSERIAL,
+  "post_id" BIGINT NOT NULL,
+  "user_id" BIGINT,
+  "text_content" TEXT NOT NULL,
+  "parent_comment_id" INTEGER, 
+  "level" INTEGER,
+  "creation_date" TIMESTAMP,
+  CONSTRAINT "comments_pk" PRIMARY KEY ("id"),
+  CONSTRAINT "users_comments_fk" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE SET NULL,
+  CONSTRAINT "posts_comments_fk" FOREIGN KEY ("post_id") REFERENCES "posts" ("id") ON DELETE CASCADE,
+  CONSTRAINT "parent_comment_id_fk" FOREIGN KEY ("parent_comment_id") REFERENCES "comments" ("id") ON DELETE CASCADE, 
+  CONSTRAINT "comment_not_empty" CHECK (LENGTH(TRIM("text_content")) >0) 	
+);
+
+CREATE INDEX "parent_child" ON "comments" ("parent_comment_id", "id");
+CREATE INDEX "comments_by_given_user" ON "comments" ("user_id", "id"); 
+CREATE INDEX "recent_comments_by_user" ON "comments" ("creation_date" DESC, "user_id");
+
+
+CREATE TABLE "votes" (
+  "id" BIGSERIAL,
+  "post_id" BIGINT NOT NULL,
+  "user_id" BIGINT,
+  "vote" SMALLINT,
+  CONSTRAINT "votes_pk" PRIMARY KEY ("id"),
+  CONSTRAINT "users_votes_fk" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE SET NULL,
+  CONSTRAINT "posts_votes_fk" FOREIGN KEY ("post_id") REFERENCES "posts" ("id") ON DELETE CASCADE,
+  CONSTRAINT "one_vote_per_post_per_user" UNIQUE ("post_id", "user_id"),
+  CONSTRAINT "valid_votes" CHECK (vote = 1 OR vote = -1)
+); 
+
+CREATE INDEX "computing_post_score" ON "votes" ("post_id", "vote");
+
+
+
+
+
+
+
+
+
+
+
+
