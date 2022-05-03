@@ -1,0 +1,219 @@
+Part 2 
+
+-- a. List all users who haven't logged in the last year.
+
+SELECT t1.id,
+	   t1.username,
+	   t1.last_login
+FROM 
+	(SELECT u.id, 
+	        u.username,
+	        u.last_login
+  	   FROM new_udiddit.users AS u) t1
+WHERE last_login < (CURRENT_DATE - 365)
+ORDER BY 1;
+
+
+
+
+-- b. List all users who haven't created any post.
+
+SELECT nu.id,
+	   nu.username
+  FROM new_udiddit.users AS nu
+ WHERE nu.id NOT IN 
+	   (SELECT DISTINCT np.user_id
+  		  FROM new_udiddit.posts AS np)
+ ORDER BY 1;
+
+SELECT COUNT(*)
+  FROM 
+      (SELECT DISTINCT np.user_id
+  		 FROM new_udiddit.posts AS np) sub
+
+
+-- c. Find a user by their username.
+
+-- d. List all topics that don't have any posts.
+
+-- e. Find a topic by its name. 
+
+-- f. List the latest 20 posts for a given topic.
+
+
+WITH recent_posts_by_topic AS 
+					    (SELECT np.id AS post_id,
+						        np.topic_id,
+						        nt.topic_name,
+						 	    np.user_id, 
+						        np.title,
+						        np.url,
+						        np.text_content,
+						        np.creation_date
+  						   FROM new_udiddit.topics nt 
+  						   JOIN new_udiddit.posts np
+    						 ON nt.id = np.topic_id)
+
+SELECT rp.creation_date,
+	   rp.topic_id,
+	   rp.topic_name
+  FROM recent_posts_by_topic AS rp
+ WHERE rp.topic_name = 'Synergized'
+ ORDER BY 1 DESC
+ LIMIT 20;
+
+
+
+
+
+-- h. Find all posts that link to a specific URL, for moderation purposes.
+
+-- i. List all top-level comments (those that don't have a parent comment) for a given post. 
+
+
+
+-- j. List all the direct children of a parent comment. 
+
+
+INSERT INTO new_udiddit.comments ("user_id", "post_id", "text_content", "parent_comment_id", "level", "creation_date") VALUES
+   (77, 9987, 'fake for testing purposes 1', 99981, NULL, CURRENT_DATE),
+   (27, 9987, 'fake comment for testing', 100001, 1, CURRENT_DATE),
+   (21, 9987, 'another fake comment for testing', 100002, 2, CURRENT_DATE),
+   (77, 9987, 'another fake comment', 100003, 3, CURRENT_DATE),
+   (81, 9987, 'fake comment', 100004, 4, CURRENT_DATE)
+   
+DELETE FROM new_udiddit.comments WHERE creation_date = '2022-04-28'   
+
+SELECT * FROM new_udiddit.comments ORDER BY id DESC
+
+DELETE FROM new_udiddit.comments WHERE parent_comment_id = 100005
+
+WITH RECURSIVE t1 AS
+			 (SELECT nc1.id,
+			 	     nc1.user_id, 
+			         nc1.post_id,
+			         nc1.text_content,
+			         nc1.parent_comment_id,
+			         nc1.level,
+			 		 nc1.creation_date
+			    FROM new_udiddit.comments nc1
+			   WHERE nc1.id = 100001
+			   
+			   UNION
+			   
+			   SELECT nc2.id,
+			 	      nc2.user_id, 
+			          nc2.post_id,
+			          nc2.text_content,
+			          nc2.parent_comment_id,
+			          nc2.level,
+			 		  nc2.creation_date
+			     FROM new_udiddit.comments nc2 
+			     JOIN t1
+			   	   ON t1.id = nc2.parent_comment_id)
+				   
+SELECT * 
+  FROM t1;
+		   
+
+
+DELETE FROM new_udiddit.comments WHERE creation_date = '2022-04-27'					
+	
+
+-- k. List the latest 20 comments made by a given user. 
+
+WITH recent_posts_by_user AS 
+					    (SELECT nc.user_id,
+       						    nu.username,
+	   							nc.id, 
+	   							nc.text_content,
+	   							nc.creation_date
+  						   FROM new_udiddit.comments nc 
+  						   JOIN new_udiddit.users nu
+    						 ON nc.user_id = nu.id
+ 						  GROUP BY 1, 2, 3, 4, 5
+ 						  ORDER BY 5 DESC, 1)
+
+
+SELECT rp.creation_date,
+	   rp.username,
+	   rp.text_content
+  FROM recent_posts_by_user AS rp
+ WHERE rp.username = 'Luz42'
+ ORDER BY 1 DESC
+ LIMIT 20;
+			
+			
+SELECT * FROM new_udiddit.posts 
+WHERE user_id = 95
+									 
+
+-- l. Compute the score of a post, defined as the difference between the number of upvotes and the number of downvotes. 
+
+
+SELECT t1.post_id,
+	   t1.title AS post_title,
+	   (t1.upvotes - t2.downvotes) AS score
+ FROM 
+       (SELECT DISTINCT nv1.post_id,
+	                    np1.title,
+                       COUNT(vote) AS upvotes
+         FROM new_udiddit.posts np1
+         JOIN new_udiddit.votes nv1
+           ON np1.id = nv1.post_id
+        WHERE vote = 1
+        GROUP BY 1, 2) t1 
+
+JOIN 
+
+	   (SELECT DISTINCT nv2.post_id,
+	  		            np2.title,
+             COUNT(vote) AS downvotes
+	    FROM new_udiddit.posts np2
+        JOIN new_udiddit.votes nv2
+          ON np2.id = nv2.post_id
+       WHERE vote = -1
+       GROUP BY 1, 2) t2
+ON t1.post_id = t2.post_id
+GROUP BY 1, 2, 3
+ORDER BY 1;
+
+
+
+
+-- Using WITH and JSON_AGG, devise a query that will retrieve a JSON document with three levels of nested comments for a given post
+
+
+WITH RECURSIVE t1 AS
+	   (SELECT nc.id,
+			   nc.user_id, 
+			   nc.post_id,
+			   nc.text_content,
+			   nc.parent_comment_id,
+			   nc.level,
+			   nc.creation_date
+		  FROM new_udiddit.comments nc
+		  JOIN new_udiddit.posts np
+            ON np.id = nc.post_id
+	     WHERE np.id = 9987 AND nc.id = 100001
+			  
+		 UNION
+			   
+		SELECT nc2.id,
+			   nc2.user_id, 
+			   nc2.post_id,
+			   nc2.text_content,
+			   nc2.parent_comment_id,
+			   nc2.level,
+			   nc2.creation_date
+		  FROM new_udiddit.comments nc2 
+		  JOIN t1
+			ON t1.id = nc2.parent_comment_id)
+			  		   
+SELECT t1.post_id,
+       t1.level, 
+	   JSON_AGG(text_content) AS JSON_doc
+  FROM t1
+ WHERE LEVEL < 4
+ GROUP BY 1, 2
+ ORDER BY 2;
