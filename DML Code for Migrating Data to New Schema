@@ -1,0 +1,76 @@
+--migrating usernames for users who created posts on exisiting topics
+INSERT INTO new_udiddit.users (username)
+SELECT DISTINCT username FROM public.bad_posts
+ON CONFLICT DO NOTHING; 
+
+--migrating usernames for users who commented on posts 
+INSERT INTO new_udiddit.users (username)
+SELECT DISTINCT username FROM public.bad_comments
+ON CONFLICT DO NOTHING; 
+
+--migrating usernames for users who upvoted or downvoted posts
+INSERT INTO new_udiddit.users (username)
+SELECT DISTINCT regexp_split_to_table("upvotes",',') FROM public.bad_posts
+
+UNION
+
+SELECT DISTINCT regexp_split_to_table("downvotes",',') FROM public.bad_posts
+ON CONFLICT DO NOTHING; 
+
+--migrating topics 
+INSERT INTO new_udiddit.topics (topic_name)
+SELECT DISTINCT topic 
+  FROM public.bad_posts; 
+
+--migrating data from posts table
+INSERT INTO new_udiddit.posts ("id", "topic_id", "user_id", "title", "url", "text_content")
+SELECT DISTINCT p.id, nt.id, nu.id, LEFT("title", 100), "url", "text_content"
+  FROM public.bad_posts p
+  	   JOIN new_udiddit.topics nt
+       ON p.topic = nt.topic_name
+  	   JOIN new_udiddit.users nu
+       ON p.username = nu.username
+    ON CONFLICT DO NOTHING;
+
+-- migrating data from comments table 
+INSERT INTO new_udiddit.comments("post_id", "user_id", "text_content")
+SELECT DISTINCT np.id, nu.id, t1.text_content
+  FROM 
+	   (SELECT DISTINCT "post_id", "username", "text_content"
+	   	FROM public.bad_comments) t1 
+	   		 JOIN new_udiddit.users nu
+  		 	   ON nu.username = t1.username
+	   		 JOIN new_udiddit.posts np
+  		 	   ON np.id = t1.post_id
+    ON CONFLICT DO NOTHING;
+
+--migrating votes 
+INSERT INTO "votes" ("post_id", "user_id", "vote")			
+SELECT DISTINCT np.id, nu.id, 1 AS vote
+  FROM 
+	   (SELECT DISTINCT topic, title, regexp_split_to_table("upvotes",',') AS upvotes 
+	   FROM public.bad_posts p) t1
+       		JOIN new_udiddit.users nu
+         	  ON t1.upvotes = nu.username
+	   		JOIN public.bad_posts p
+  		 	  ON t1.upvotes = p.upvotes
+	   		JOIN new_udiddit.posts np
+  		 	  ON t1.title = np.title
+			  
+UNION 
+
+SELECT DISTINCT np.id, nu.id, -1 AS vote
+  FROM 
+	   (SELECT DISTINCT topic, title, regexp_split_to_table("downvotes",',') AS downvotes 
+	      FROM public.bad_posts p) t1
+	   	       JOIN new_udiddit.users nu
+  		 		 ON t1.downvotes = nu.username
+	   		   JOIN public.bad_posts p
+  		 		 ON t1.downvotes = p.downvotes
+	   		   JOIN new_udiddit.posts np
+  		 		 ON t1.title = np.title
+    ON CONFLICT DO NOTHING;
+
+
+INSERT INTO posts(id, user_id, topic_id, title, url, text_content)
+VALUES(50001, 10, 10, 'title_1', null, null);
